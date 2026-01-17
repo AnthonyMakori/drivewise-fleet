@@ -7,7 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { mockCars, mockBookings, type Booking } from "@/lib/mockData";
+import api from "@/lib/api";
+import type { Booking as BookingType } from "@/lib/mockData";
 import { getAuthState } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Car, Users, Gauge, Fuel, Calendar as CalendarIcon, DollarSign } from "lucide-react";
@@ -18,7 +19,7 @@ const CarDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [car, setCar] = useState(mockCars.find(c => c.id === id));
+  const [car, setCar] = useState<any | undefined>(undefined);
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
   const [totalCost, setTotalCost] = useState(0);
@@ -32,6 +33,19 @@ const CarDetails = () => {
       setTotalCost(0);
     }
   }, [startDate, endDate, car]);
+
+  useEffect(() => {
+    if (!id) return;
+    const load = async () => {
+      try {
+        const c = await api.getCar(id);
+        setCar(c);
+      } catch (e) {
+        setCar(undefined);
+      }
+    };
+    load();
+  }, [id]);
 
   if (!car) {
     return (
@@ -66,25 +80,23 @@ const CarDetails = () => {
       return;
     }
 
-    const booking: Booking = {
-      id: Date.now().toString(),
-      carId: car.id,
-      customerId: authState.user!.id,
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-      totalCost,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
-
-    mockBookings.push(booking);
-    localStorage.setItem("car-hire-bookings", JSON.stringify(mockBookings));
-
-    toast({
-      title: "Booking submitted!",
-      description: "Your booking request has been sent to admin for approval.",
-    });
-    navigate("/bookings");
+    (async () => {
+      try {
+        const payload = {
+          car_id: car.id,
+          start_date: startDate.toISOString().slice(0,10),
+          end_date: endDate.toISOString().slice(0,10),
+        };
+        await api.createBooking(payload);
+        toast({
+          title: "Booking submitted!",
+          description: "Your booking request has been sent to admin for approval.",
+        });
+        navigate("/bookings");
+      } catch (e: any) {
+        toast({ variant: "destructive", title: "Booking failed", description: e?.response?.data?.message || "Could not create booking" });
+      }
+    })();
   };
 
   return (

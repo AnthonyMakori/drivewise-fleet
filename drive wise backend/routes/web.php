@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\File;
 
 /*
 |--------------------------------------------------------------------------
@@ -16,3 +17,12 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+// Serve SPA build if present in public/ (frontend build output)
+Route::get('/{any}', function () {
+    $index = public_path('index.html');
+    if (File::exists($index)) {
+        return response(File::get($index), 200)->header('Content-Type', 'text/html');
+    }
+    return view('welcome');
+})->where('any', '.*');

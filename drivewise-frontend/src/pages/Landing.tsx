@@ -7,10 +7,23 @@ import { ContactSection } from "@/components/ContactSection";
 import { PricingSection } from "@/components/PricingSection";
 import { FAQSection } from "@/components/FAQSection";
 import { Footer } from "@/components/Footer";
-import { mockCars } from "@/lib/mockData";
+import api from "@/lib/api";
+import type { Car as CarType } from "@/lib/mockData";
 
 const Landing = () => {
-  const featuredCars = mockCars.slice(0, 3);
+  const [featuredCars, setFeaturedCars] = useState<CarType[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const cars = await api.getCars();
+        setFeaturedCars(cars.slice(0, 3));
+      } catch (e) {
+        setFeaturedCars([]);
+      }
+    };
+    load();
+  }, []);
 
   return (
     <div className="min-h-screen">

@@ -5,7 +5,7 @@ import { Footer } from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getAuthState, isAdmin } from "@/lib/auth";
-import { mockCars, mockBookings, mockCustomers } from "@/lib/mockData";
+import api from "@/lib/api";
 import { Car, Users, DollarSign, Calendar, TrendingUp } from "lucide-react";
 import { CarsManagement } from "@/components/admin/CarsManagement";
 import { BookingsManagement } from "@/components/admin/BookingsManagement";
@@ -15,25 +15,43 @@ import { ReportsSection } from "@/components/admin/ReportsSection";
 const Admin = () => {
   const navigate = useNavigate();
   const authState = getAuthState();
-  const [bookings, setBookings] = useState(mockBookings);
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [cars, setCars] = useState<any[]>([]);
+  const [customersCount, setCustomersCount] = useState(0);
 
   useEffect(() => {
     if (!authState.isAuthenticated || !isAdmin(authState.user)) {
       navigate("/");
     }
 
-    // Load bookings from localStorage
-    const stored = localStorage.getItem("car-hire-bookings");
-    if (stored) {
-      setBookings(JSON.parse(stored));
-    }
+    const load = async () => {
+      try {
+        const [remoteBookings, remoteCars] = await Promise.all([api.getBookings(), api.getCars()]);
+        setBookings(remoteBookings);
+        setCars(remoteCars);
+        // derive customers from bookings
+        const map = new Map<string, any>();
+        remoteBookings.forEach((b: any) => {
+          if (b.raw && b.raw.user) {
+            const u = b.raw.user;
+            map.set(String(u.id), u);
+          }
+        });
+        setCustomersCount(map.size);
+      } catch (e) {
+        setBookings([]);
+        setCars([]);
+        setCustomersCount(0);
+      }
+    };
+    load();
   }, [authState, navigate]);
 
-  const availableCars = mockCars.filter(c => c.status === "available").length;
+  const availableCars = cars.filter((c: any) => c.status === "available").length;
   const carsOut = bookings.filter(b => b.status === "out").length;
   const totalRevenue = bookings
     .filter(b => b.status === "returned")
-    .reduce((sum, b) => sum + b.totalCost, 0);
+    .reduce((sum, b) => sum + (b.totalCost || b.total_price || 0), 0);
   const pendingBookings = bookings.filter(b => b.status === "pending").length;
 
   return (
@@ -53,7 +71,7 @@ const Admin = () => {
               <Car className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{mockCars.length}</div>
+              <div className="text-2xl font-bold">{cars.length}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 {availableCars} available
               </p>
@@ -83,7 +101,7 @@ const Admin = () => {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{mockCustomers.length}</div>
+              <div className="text-2xl font-bold">{customersCount}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Registered users
               </p>

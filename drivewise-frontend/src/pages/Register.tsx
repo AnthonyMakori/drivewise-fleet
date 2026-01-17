@@ -59,7 +59,8 @@ const Register = () => {
         validated.name,
         validated.email,
         validated.phone,
-        validated.password
+        validated.password,
+        validated.confirmPassword
       );
 
       toast({

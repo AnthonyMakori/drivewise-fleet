@@ -1,17 +1,31 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { mockBookings } from "@/lib/mockData";
 import { Download, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect, useState } from "react";
+import api from "@/lib/api";
 
 export const ReportsSection = () => {
   const { toast } = useToast();
+  const [bookings, setBookings] = useState<any[]>([]);
 
-  const totalBookings = mockBookings.length;
-  const completedBookings = mockBookings.filter(b => b.status === "returned").length;
-  const totalRevenue = mockBookings
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const b = await api.getBookings();
+        setBookings(b);
+      } catch (e) {
+        setBookings([]);
+      }
+    };
+    load();
+  }, []);
+
+  const totalBookings = bookings.length;
+  const completedBookings = bookings.filter(b => b.status === "returned").length;
+  const totalRevenue = bookings
     .filter(b => b.status === "returned")
-    .reduce((sum, b) => sum + b.totalCost, 0);
+    .reduce((sum, b) => sum + (b.totalCost || b.total_price || 0), 0);
   const avgBookingValue = completedBookings > 0 ? totalRevenue / completedBookings : 0;
 
   const handleExport = () => {

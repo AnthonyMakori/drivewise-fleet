@@ -2,6 +2,7 @@ import api from "./axios";
 import type { User } from "../types/user"; 
 
 const AUTH_STORAGE_KEY = "car-hire-auth";
+const TOKEN_STORAGE_KEY = "drivewise_token";
 
 export interface AuthState {
   user: User | null;
@@ -25,8 +26,10 @@ export const setAuthState = (state: AuthState): void => {
 
   if (state.token) {
     api.defaults.headers.common["Authorization"] = `Bearer ${state.token}`;
+    localStorage.setItem(TOKEN_STORAGE_KEY, state.token);
   } else {
     delete api.defaults.headers.common["Authorization"];
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
   }
 };
 
@@ -50,7 +53,8 @@ export const register = async (
   name: string,
   email: string,
   phone: string,
-  password: string
+  password: string,
+  confirmPassword: string
 ): Promise<User> => {
   const response = await api.post("/register", {
     name,
@@ -80,6 +84,7 @@ export const logout = async (): Promise<void> => {
   }
 
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
   delete api.defaults.headers.common["Authorization"];
 };
 

@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { mockBookings, mockCars, mockCustomers, type Booking } from "@/lib/mockData";
+import api from "@/lib/api";
+import type { Booking } from "@/lib/mockData";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Check, X, Car as CarIcon, RotateCcw } from "lucide-react";
@@ -12,15 +13,26 @@ export const BookingsManagement = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
 
   useEffect(() => {
-    const stored = localStorage.getItem("car-hire-bookings");
-    setBookings(stored ? JSON.parse(stored) : mockBookings);
+    const load = async () => {
+      try {
+        const remote = await api.getBookings();
+        setBookings(remote);
+      } catch (e) {
+        setBookings([]);
+      }
+    };
+    load();
   }, []);
 
-  const updateBooking = (id: string, status: Booking["status"]) => {
-    const updated = bookings.map(b => b.id === id ? { ...b, status } : b);
-    setBookings(updated);
-    localStorage.setItem("car-hire-bookings", JSON.stringify(updated));
-    toast({ title: `Booking ${status}` });
+  const updateBooking = async (id: string, status: Booking["status"]) => {
+    try {
+      const res = await api.updateBookingStatus(id, status);
+      const updated = bookings.map(b => b.id === id ? { ...b, status: res.status } : b);
+      setBookings(updated);
+      toast({ title: `Booking ${status}` });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Update failed", description: "Could not update booking status" });
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -45,8 +57,8 @@ export const BookingsManagement = () => {
             <p className="text-center text-muted-foreground py-8">No bookings yet</p>
           ) : (
             bookings.map((booking) => {
-              const car = mockCars.find(c => c.id === booking.carId);
-              const customer = mockCustomers.find(c => c.id === booking.customerId);
+              const car = (booking as any).car;
+              const customer = (booking as any).raw?.user;
               if (!car || !customer) return null;
 
               return (
@@ -69,18 +81,18 @@ export const BookingsManagement = () => {
                     <div>
                       <span className="text-muted-foreground">Start:</span>{" "}
                       <span className="font-medium">
-                        {format(new Date(booking.startDate), "MMM dd, yyyy")}
+                        {format(new Date(booking.startDate || booking.start_date), "MMM dd, yyyy")}
                       </span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">End:</span>{" "}
                       <span className="font-medium">
-                        {format(new Date(booking.endDate), "MMM dd, yyyy")}
+                        {format(new Date(booking.endDate || booking.end_date), "MMM dd, yyyy")}
                       </span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Total:</span>{" "}
-                      <span className="font-medium text-primary">${booking.totalCost}</span>
+                      <span className="font-medium text-primary">${booking.totalCost || booking.total_price}</span>
                     </div>
                   </div>
 

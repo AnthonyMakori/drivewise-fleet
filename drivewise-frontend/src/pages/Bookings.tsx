@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getAuthState } from "@/lib/auth";
-import { mockBookings, mockCars, type Booking } from "@/lib/mockData";
+import api from "@/lib/api";
+import type { Booking as Booking } from "@/lib/mockData";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Calendar, DollarSign, Car } from "lucide-react";
@@ -22,25 +23,28 @@ const Bookings = () => {
       navigate("/login");
       return;
     }
-
-    // Load bookings from localStorage
-    const stored = localStorage.getItem("car-hire-bookings");
-    const allBookings = stored ? JSON.parse(stored) : mockBookings;
-    const userBookings = allBookings.filter((b: Booking) => b.customerId === authState.user?.id);
-    setBookings(userBookings);
+    const load = async () => {
+      try {
+        const remote = await api.getBookings();
+        setBookings(remote);
+      } catch (e) {
+        setBookings([]);
+      }
+    };
+    load();
   }, [authState, navigate]);
 
   const handleCancel = (bookingId: string) => {
-    const updated = bookings.map(b => 
-      b.id === bookingId ? { ...b, status: "declined" as const } : b
-    );
-    setBookings(updated);
-    localStorage.setItem("car-hire-bookings", JSON.stringify(updated));
-    
-    toast({
-      title: "Booking cancelled",
-      description: "Your booking has been cancelled successfully.",
-    });
+    (async () => {
+      try {
+        const res = await api.cancelBooking(bookingId);
+        const updated = bookings.map(b => b.id === bookingId ? { ...b, status: res.status } : b);
+        setBookings(updated);
+        toast({ title: "Booking cancelled", description: "Your booking has been cancelled successfully." });
+      } catch (e) {
+        toast({ variant: "destructive", title: "Cancel failed", description: "Could not cancel booking" });
+      }
+    })();
   };
 
   const getStatusColor = (status: string) => {
@@ -71,7 +75,7 @@ const Bookings = () => {
         ) : (
           <div className="space-y-4">
             {bookings.map(booking => {
-              const car = mockCars.find(c => c.id === booking.carId);
+              const car = booking.car;
               if (!car) return null;
               
               return (

@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getAuthState, setAuthState } from "@/lib/auth";
-import { mockCustomers } from "@/lib/mockData";
 import { useToast } from "@/hooks/use-toast";
 import { User } from "lucide-react";
 import { z } from "zod";
@@ -40,29 +39,22 @@ const Profile = () => {
     try {
       const validated = profileSchema.parse({ name, email, phone });
       
-      // Update user in mockCustomers
-      const userIndex = mockCustomers.findIndex(c => c.id === authState.user?.id);
-      if (userIndex !== -1) {
-        mockCustomers[userIndex] = {
-          ...mockCustomers[userIndex],
-          name: validated.name,
-          email: validated.email,
-          phone: validated.phone,
-        };
-        
-        // Update auth state
-        const updatedAuthState = {
-          ...authState,
-          user: mockCustomers[userIndex],
-        };
-        setAuthState(updatedAuthState);
-        window.dispatchEvent(new Event("auth-change"));
-        
-        toast({
-          title: "Profile updated!",
-          description: "Your profile has been updated successfully.",
-        });
-      }
+      // Update auth state locally (backend endpoint not available)
+      const updatedUser = {
+        ...authState.user,
+        name: validated.name,
+        email: validated.email,
+        phone: validated.phone,
+      } as any;
+
+      const updatedAuthState = {
+        ...authState,
+        user: updatedUser,
+      };
+      setAuthState(updatedAuthState);
+      window.dispatchEvent(new Event("auth-change"));
+
+      toast({ title: "Profile updated!", description: "Your profile has been updated locally." });
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast({

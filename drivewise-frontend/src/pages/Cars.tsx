@@ -6,53 +6,58 @@ import { CarCard } from "@/components/CarCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
-import { mockCars } from "@/lib/mockData";
+import api from "@/lib/api";
+
+import type { Car as CarType } from "@/lib/mockData";
 
 const Cars = () => {
   const [searchParams] = useSearchParams();
-  const [filteredCars, setFilteredCars] = useState(mockCars);
+  const [filteredCars, setFilteredCars] = useState<CarType[]>([]);
   const [brand, setBrand] = useState("");
   const [transmission, setTransmission] = useState("");
   const [fuelType, setFuelType] = useState("");
   const [priceRange, setPriceRange] = useState([0, 200]);
 
-  const brands = Array.from(new Set(mockCars.map(car => car.brand)));
+  const [allCars, setAllCars] = useState<CarType[]>([]);
+  const brands = Array.from(new Set(allCars.map(car => car.brand)));
 
   useEffect(() => {
-    let filtered = [...mockCars];
+    const load = async () => {
+      try {
+        const cars = await api.getCars();
+        setAllCars(cars);
+      } catch (e) {
+        setAllCars([]);
+      }
+    };
+    load();
+  }, []);
 
-    // Apply filters
-    if (brand) {
-      filtered = filtered.filter(car => car.brand === brand);
-    }
-    if (transmission) {
-      filtered = filtered.filter(car => car.transmission === transmission);
-    }
-    if (fuelType) {
-      filtered = filtered.filter(car => car.fuelType === fuelType);
-    }
-    filtered = filtered.filter(
-      car => car.dailyRate >= priceRange[0] && car.dailyRate <= priceRange[1]
-    );
+  useEffect(() => {
+    let filtered = [...allCars];
 
-    // Apply URL params
+    if (brand && brand !== "all") filtered = filtered.filter(car => car.brand === brand);
+    if (transmission && transmission !== "all") filtered = filtered.filter(car => car.transmission === transmission);
+    if (fuelType && fuelType !== "all") filtered = filtered.filter(car => car.fuelType === fuelType);
+    filtered = filtered.filter(car => car.dailyRate >= priceRange[0] && car.dailyRate <= priceRange[1]);
+
     const typeParam = searchParams.get("type");
     const priceParam = searchParams.get("price");
-    
+
     if (typeParam) {
-      filtered = filtered.filter(car => 
+      filtered = filtered.filter(car =>
         car.fuelType.toLowerCase().includes(typeParam.toLowerCase()) ||
         car.transmission.toLowerCase().includes(typeParam.toLowerCase())
       );
     }
-    
+
     if (priceParam) {
       const [min, max] = priceParam.split("-").map(Number);
-      filtered = filtered.filter(car => car.dailyRate >= min && car.dailyRate <= max);
+      if (!isNaN(min) && !isNaN(max)) filtered = filtered.filter(car => car.dailyRate >= min && car.dailyRate <= max);
     }
 
     setFilteredCars(filtered);
-  }, [brand, transmission, fuelType, priceRange, searchParams]);
+  }, [brand, transmission, fuelType, priceRange, searchParams, allCars]);
 
   return (
     <div className="min-h-screen bg-background">

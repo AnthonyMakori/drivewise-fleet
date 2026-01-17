@@ -7,15 +7,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { mockCars, type Car } from "@/lib/mockData";
+import api from "@/lib/api";
+import type { Car } from "@/lib/mockData";
+import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit, Trash2, Power, PowerOff } from "lucide-react";
 
 export const CarsManagement = () => {
   const { toast } = useToast();
-  const [cars, setCars] = useState(mockCars);
+  const [cars, setCars] = useState<Car[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const remote = await api.getCars();
+        setCars(remote);
+      } catch (e) {
+        setCars([]);
+      }
+    };
+    load();
+  }, []);
   const [editingCar, setEditingCar] = useState<Car | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Partial<Car>>({
     name: "",
@@ -31,57 +47,118 @@ export const CarsManagement = () => {
     description: "",
   });
 
+  // store file objects separately for detection
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+
   const handleEdit = (car: Car) => {
     setEditingCar(car);
     setFormData(car);
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setCars(cars.filter(c => c.id !== id));
-    toast({ title: "Car deleted successfully" });
-  };
-
-  const toggleStatus = (id: string) => {
-    setCars(cars.map(c => 
-      c.id === id 
-        ? { ...c, status: c.status === "available" ? "unavailable" : "available" as const }
-        : c
-    ));
-    toast({ title: "Car status updated" });
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (editingCar) {
-      setCars(cars.map(c => c.id === editingCar.id ? { ...formData as Car, id: editingCar.id } : c));
-      toast({ title: "Car updated successfully" });
-    } else {
-      const newCar: Car = {
-        ...formData as Car,
-        id: Date.now().toString(),
-        images: formData.images?.length ? formData.images : ["https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=800&auto=format&fit=crop"],
-      };
-      setCars([...cars, newCar]);
-      toast({ title: "Car added successfully" });
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this car? This action cannot be undone.")) return;
+    try {
+      setDeletingId(id);
+      await api.deleteCar(id);
+      setCars(prev => prev.filter(c => c.id !== id));
+      toast({ title: "Car deleted" });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Delete failed", description: e?.response?.data?.message || "Could not delete car" });
+    } finally {
+      setDeletingId(null);
     }
-    
-    setIsDialogOpen(false);
-    setEditingCar(null);
-    setFormData({
-      name: "",
-      brand: "",
-      model: "",
-      year: new Date().getFullYear(),
-      seats: 5,
-      transmission: "Automatic",
-      fuelType: "Petrol",
-      dailyRate: 0,
-      status: "available",
-      images: [],
-      description: "",
-    });
+  };
+
+  const toggleStatus = async (id: string) => {
+    const car = cars.find(c => c.id === id);
+    if (!car) return;
+    const newActive = car.status !== "available";
+    try {
+      const updated = await api.updateCar(id, { active: newActive });
+      setCars(prev => prev.map(c => c.id === id ? updated : c));
+      toast({ title: "Car status updated" });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Update failed", description: e?.response?.data?.message || "Could not update car" });
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      // If image files selected, send multipart/form-data
+      const hasFiles = imageFiles && imageFiles.length > 0;
+
+      if (hasFiles) {
+        const fd = new FormData();
+        fd.append('name', String(formData.name || ''));
+        fd.append('brand', String(formData.brand || ''));
+        fd.append('model', String(formData.model || ''));
+        fd.append('year', String(formData.year || ''));
+        fd.append('seats', String(formData.seats || ''));
+        fd.append('gear_type', String((formData.transmission || '').toString().toLowerCase()));
+        fd.append('fuel_type', String(formData.fuelType || ''));
+        fd.append('daily_price', String(formData.dailyRate || 0));
+        fd.append('description', String(formData.description || ''));
+        fd.append('active', formData.status === 'available' ? '1' : '0');
+        imageFiles.forEach((f) => fd.append('images_files[]', f));
+
+        if (editingCar) {
+          const updated = await api.updateCar(editingCar.id, fd);
+          setCars(prev => prev.map(c => c.id === editingCar.id ? updated : c));
+          toast({ title: 'Car updated' });
+        } else {
+          const created = await api.createCar(fd);
+          setCars(prev => [created, ...prev]);
+          toast({ title: 'Car created' });
+        }
+      } else {
+        const payload: any = {
+          name: formData.name,
+          brand: formData.brand,
+          model: formData.model,
+          year: formData.year,
+          seats: formData.seats,
+          gear_type: (formData.transmission || "").toString().toLowerCase(),
+          fuel_type: formData.fuelType,
+          daily_price: formData.dailyRate,
+          description: formData.description,
+          images: formData.images && formData.images.length ? formData.images : [],
+          active: formData.status === "available",
+        };
+
+        if (editingCar) {
+          const updated = await api.updateCar(editingCar.id, payload);
+          setCars(prev => prev.map(c => c.id === editingCar.id ? updated : c));
+          toast({ title: "Car updated" });
+        } else {
+          const created = await api.createCar(payload);
+          setCars(prev => [created, ...prev]);
+          toast({ title: "Car created" });
+        }
+      }
+
+      setIsDialogOpen(false);
+      setEditingCar(null);
+      setFormData({
+        name: "",
+        brand: "",
+        model: "",
+        year: new Date().getFullYear(),
+        seats: 5,
+        transmission: "Automatic",
+        fuelType: "Petrol",
+        dailyRate: 0,
+        status: "available",
+        images: [],
+        description: "",
+      });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Save failed", description: e?.response?.data?.message || "Could not save car" });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -201,6 +278,20 @@ export const CarsManagement = () => {
                     onChange={(e) => setFormData({ ...formData, images: [e.target.value] })}
                     placeholder="https://..."
                   />
+                  <div className="mt-2">
+                    <Label>Or upload images</Label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => {
+                        const files = e.target.files ? Array.from(e.target.files) : [];
+                        setImageFiles(files);
+                        // clear any manual URL when uploading
+                        if (files.length) setFormData({ ...formData, images: [] });
+                      }}
+                    />
+                  </div>
                 </div>
                 <Button type="submit" className="w-full">
                   {editingCar ? "Update Car" : "Add Car"}
